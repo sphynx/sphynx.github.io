@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <meta name="author" content="Ivan Veselov">
+  <meta name="keywords" content="veselov, haskell, programming, travel, ivan veselov, dying_sphynx, sphynx">
+  <meta name="description" content="Home page of Ivan Veselov aka dying_sphynx">
+  <meta name="generator" content="hakyll">
+
+  <link rel="stylesheet" href="../static/main.css" />
+  <link rel="stylesheet" href="../static/rose.css" />
+  <link rel="stylesheet" href="../static/syntax.css" />
+
+  <!-- Google webfonts -->
+  <link href="http://fonts.googleapis.com/css?family=Droid+Sans+Mono|Ubuntu&amp;subset=latin,cyrillic" rel="stylesheet" type="text/css">
+
+  <link rel="icon" href="../favicon.ico" />
+
+  <!--[if IE]>
+  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js"></script>
+
+  <title>Existential types and data abstraction</title>
+
+  <link rel="openid.server" href="http://www.myopenid.com/server" />
+  <link rel="openid.delegate" href="http://ivan.veselov.myopenid.com/" />
+  <link rel="openid2.local_id" href="http://ivan.veselov.myopenid.com/" />
+  <link rel="openid2.provider" href="http://www.myopenid.com/server" />
+
+  <!-- Google analytics -->
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-21420068-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+</head>
+
+<body>
+  <header>
+    <img src="../static/myself.jpg" id="photo" />
+    <hgroup>
+      <h1 id="myname"><a href="../">Ivan Veselov</a></h1>
+      <h2 id="description"> a software developer, chess player, geek and traveller</h2>
+    </hgroup>
+  </header>
+
+  <script type="text/javascript">
+    var disqus_developer = 1;
+</script>
+
+<article>
+
+<h1 class="post_title">Existential types and data abstraction</h1>
+<div class="post_date">posted on Aug 30, 2012</div>
+
+<p>Lately, I have been encountering interesting pieces of Haskell code full of various type-related concepts: GADTs, existential types, type families, etc. Now I am trying to face them one by one and grok as much as I can.</p>
+<div></div><!--more-->
+
+<p>I think I have managed to understand several interesting ideas in existential types which I’d like to share with others.</p>
+<p>This post is based on literal Haskell code, which can be <a href="https://raw.github.com/sphynx/iveselov.info/master/posts/2012-08-30-existential-types.lhs">downloaded</a> (and run in <code>ghci</code>) from Github.</p>
+<h2 id="example-of-type-declaration">Example of type declaration</h2>
+<p>Let’s start with an example of existential type. I will use some pseudo-code notation which will be transformed into usual Haskell (albeit with certain GHC extensions) later.</p>
+<pre><code>T = ∃a. { x :: a
+        , f :: a -&gt; Int
+        }</code></pre>
+<p>We define a new type <code>T</code>. It has a type variable <code>a</code>, which is existentially quantified (this is expressed with a quantifier ∃, <em>exists</em>). Also we have a record with two fields: a value <code>x</code> and a function <code>f</code>.</p>
+<p><em>Existentially quantified</em> means that there exists some type <code>a</code>, which we may choose when we <em>construct</em> a value of existential type.</p>
+<p>To understand this better, let’s see how we construct and use values of existential types.</p>
+<h2 id="value-construction">Value construction</h2>
+<p>Consider several example values of type <code>T</code> defined above (i.e. possible elements of <code>T</code>):</p>
+<pre><code>{ x = 1,     f = \n -&gt; n + 2 }                 (a = Int)
+{ x = False, f = \b -&gt; if b then 1 else 0 }    (a = Bool)
+{ x = 'c',   f = \c -&gt; ord c }                 (a = Char)</code></pre>
+<p>Existentially typed values consist of two components:</p>
+<ul>
+<li>a type component</li>
+<li>a term component</li>
+</ul>
+<p>The type component is called <em>hidden representation type</em> or <em>witness type</em> (a tribute to mathematical logic). The term component in this example is a record with two fields.</p>
+<p>Note an interesting thing: even though we have chosen <code>a</code> to be different in every example, all three values belong to the same existential type <code>T</code>.</p>
+<p>Well, while looking on the three examples above, we have seen how values of existential types are constructed: we choose the representation type <code>a</code> and values for <code>x</code> and <code>f</code> fields are chosen accordingly.</p>
+<h2 id="value-usage">Value usage</h2>
+<p>Now let’s think how we can use these values. We may use pattern matching to deconstruct the value:</p>
+<pre><code>use (T x f) = ???</code></pre>
+<p>What is the type of <code>x</code>? We don’t know and can’t know: it is held abstract, since we could have chosen any type while constructing the value, as you have seen in the previous section.</p>
+<p>The only thing we know here is that the very same abstract type is present in the type of <code>f</code> (a quick refresher: <code>x :: a, f :: a -&gt; Int</code>), so that <code>f</code> and <code>x</code> are composable: we can apply <code>f</code> to <code>x</code> to obtain an <code>Int</code>:</p>
+<pre><code>use :: T -&gt; Int
+use (T x f) = f x</code></pre>
+<p>In fact, this is all we can do with this value.</p>
+<p>So we have a hidden representation type and several allowed operations, hm… A-ha, this reminds me a very well-known concept! Indeed, it is quite similar to the familiar idea of abstract data types: we are hiding implementation details and provide only a certain set of allowed operations, so that later we can freely change the implementation and no one will notice.</p>
+<p>We have just seen a connection between existential types and abstract data types, which, I believe, is the most important aspect of existential types.</p>
+<h2 id="more-realistic-example-slightly">More realistic example (slightly)</h2>
+<p>In the previous example, all we could do was to get an <code>Int</code> and it’s not very exciting – we could just have used <code>Int</code> directly instead! Let’s see one more example, this time written in Haskell. Certain questions will arise after looking on the code below. I hope I’ll answer most of them in the rest of the article.</p>
+<p>Meet the Counter!</p>
+<div class="figure">
+<img src="../static/counter.jpg" title="Digital counter" />
+</div>
+<pre class="sourceCode literate literatehaskell"><code class="sourceCode literatehaskell"><span class="ot">&gt;</span> <span class="ot">{-# LANGUAGE ExistentialQuantification #-}</span>
+<span class="ot">&gt;</span> 
+<span class="ot">&gt;</span> <span class="kw">data</span> <span class="dt">Counter</span> <span class="fu">=</span> forall a<span class="fu">.</span> <span class="dt">MkCounter</span>
+<span class="ot">&gt;</span>   a           <span class="co">-- new</span>
+<span class="ot">&gt;</span>   (a <span class="ot">-&gt;</span> a)    <span class="co">-- inc</span>
+<span class="ot">&gt;</span>   (a <span class="ot">-&gt;</span> <span class="dt">Int</span>)  <span class="co">-- get</span></code></pre>
+<p>Here we have a constructor with three fields, since our counter supports three operations: <code>new</code> creates a new counter, <code>inc</code> increments a counter by one and <code>get</code> retrieves the current counter value. Representation type <code>a</code> remains hidden and abstract, note that we don’t have it in the left hand side of the type definition.</p>
+<p>Let’s implement two different types of counter, i.e. let’s construct two values of <code>Counter</code> type. For the first of them we choose <code>a</code> to be <code>Int</code>:</p>
+<pre class="sourceCode literate literatehaskell"><code class="sourceCode literatehaskell"><span class="ot">&gt; intCounter ::</span> <span class="dt">Counter</span>
+<span class="ot">&gt;</span> intCounter <span class="fu">=</span> <span class="dt">MkCounter</span>
+<span class="ot">&gt;</span>   <span class="dv">0</span>     <span class="co">-- new</span>
+<span class="ot">&gt;</span>   (<span class="fu">+</span><span class="dv">1</span>)  <span class="co">-- inc</span>
+<span class="ot">&gt;</span>   <span class="fu">id</span>    <span class="co">-- get</span></code></pre>
+<p>And let’s use a list type for the second one, somewhat arbitrary, but why not? We increment the counter by adding a unit element to the list and we get the counter value by evaluating the length of the list:</p>
+<pre class="sourceCode literate literatehaskell"><code class="sourceCode literatehaskell"><span class="ot">&gt; listCounter ::</span> <span class="dt">Counter</span>
+<span class="ot">&gt;</span> listCounter <span class="fu">=</span> <span class="dt">MkCounter</span>
+<span class="ot">&gt;</span>   []       <span class="co">-- new</span>
+<span class="ot">&gt;</span>   (() <span class="fu">:</span>)   <span class="co">-- inc</span>
+<span class="ot">&gt;</span>   <span class="fu">length</span>   <span class="co">-- get</span></code></pre>
+<p>Now let’s use it:</p>
+<pre class="sourceCode literate literatehaskell"><code class="sourceCode literatehaskell"><span class="ot">&gt; test ::</span> <span class="dt">Counter</span> <span class="ot">-&gt;</span> <span class="dt">Int</span>
+<span class="ot">&gt;</span> test (<span class="dt">MkCounter</span> new inc get) <span class="fu">=</span> get <span class="fu">$</span> inc <span class="fu">$</span> inc <span class="fu">$</span> new</code></pre>
+<pre><code>*Main&gt; test intCounter
+2
+*Main&gt; test listCounter
+2</code></pre>
+<p>See? We pass as an argument a <em>concrete</em> implementation of abstract data type (which is in the same time just a value of existential type Counter), therefore providing our <code>test</code> function with three operations on counters, which may be composed in certain ways.</p>
+<h2 id="types-assignment">Types assignment</h2>
+<p>It’s interesting to see what types are assigned to the variables <code>new</code>, <code>inc</code> and <code>get</code>. Each time when we pattern match against a constructor with existentially typed variable inside (<code>a</code> in our case), the type checker uses a completely new type for <code>a</code>, which is guaranteed to be different from every other type in the program, so that it cannot be unified with any other type variable. For example here:</p>
+<pre><code>test (MkCounter new inc get) = ...</code></pre>
+<p>the type-checker sets <code>a</code> to, say some unique <code>c1</code> and therefore assigns the following types to <code>new</code>, <code>inc</code> and <code>get</code> variables:</p>
+<pre><code>new :: c1
+inc :: c1 -&gt; c1
+get :: c1 -&gt; Int</code></pre>
+<h2 id="type-classes-and-constrained-existentials">Type classes and constrained existentials</h2>
+<p>Now let’s take a look at the classical first example of existentials.</p>
+<p>Let’s say we want to have a list of values of different types, and each of them is an instance of Show, so that we can print them all. No problems:</p>
+<pre class="sourceCode literate literatehaskell"><code class="sourceCode literatehaskell"><span class="ot">&gt;</span> <span class="kw">data</span> <span class="dt">ShowBox</span> <span class="fu">=</span> forall a<span class="fu">.</span> <span class="kw">Show</span> a <span class="ot">=&gt;</span> <span class="dt">ShowBox</span> a
+<span class="ot">&gt;</span> 
+<span class="ot">&gt;</span> <span class="kw">instance</span> <span class="kw">Show</span> <span class="dt">ShowBox</span> <span class="kw">where</span>
+<span class="ot">&gt;</span>    <span class="fu">show</span> (<span class="dt">ShowBox</span> v) <span class="fu">=</span> <span class="fu">show</span> v
+<span class="ot">&gt;</span> 
+<span class="ot">&gt; boxList ::</span> [<span class="dt">ShowBox</span>]
+<span class="ot">&gt;</span> boxList <span class="fu">=</span> [ <span class="dt">ShowBox</span> <span class="dv">1</span>
+<span class="ot">&gt;</span>           , <span class="dt">ShowBox</span> <span class="kw">False</span>
+<span class="ot">&gt;</span>           , <span class="dt">ShowBox</span> [<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>]
+<span class="ot">&gt;</span>           ]
+<span class="ot">&gt;</span> 
+<span class="ot">&gt; testShowBox ::</span> <span class="dt">IO</span> ()
+<span class="ot">&gt;</span> testShowBox <span class="fu">=</span>
+<span class="ot">&gt;</span>     <span class="fu">mapM_</span> (\sb <span class="ot">-&gt;</span> <span class="fu">putStrLn</span> <span class="fu">$</span> <span class="fu">show</span> sb) boxList</code></pre>
+<pre><code>*Main&gt; testShowBox
+1
+False
+[1,2,3]</code></pre>
+<p>Voilà! In fact, having <code>Show a</code> constraint is equivalent to having an additional <code>show</code> operation in our data type (similar to <code>inc</code>, <code>get</code> we saw before):</p>
+<pre class="sourceCode literate literatehaskell"><code class="sourceCode literatehaskell"><span class="ot">&gt;</span> <span class="kw">data</span> <span class="dt">ShowBox2</span> <span class="fu">=</span> forall a<span class="fu">.</span> <span class="dt">ShowBox2</span>
+<span class="ot">&gt;</span>   a             <span class="co">-- value</span>
+<span class="ot">&gt;</span>   (a <span class="ot">-&gt;</span> <span class="dt">String</span>) <span class="co">-- show operation</span>
+<span class="ot">&gt;</span> 
+<span class="ot">&gt; boxList2 ::</span> [<span class="dt">ShowBox2</span>]
+<span class="ot">&gt;</span> boxList2 <span class="fu">=</span> [ <span class="dt">ShowBox2</span> <span class="dv">1</span> <span class="fu">show</span>
+<span class="ot">&gt;</span>            , <span class="dt">ShowBox2</span> <span class="kw">False</span> <span class="fu">show</span>
+<span class="ot">&gt;</span>            , <span class="dt">ShowBox2</span> [<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>] <span class="fu">show</span>
+<span class="ot">&gt;</span>            ]
+<span class="ot">&gt;</span> 
+<span class="ot">&gt; testShowBox2 ::</span> <span class="dt">IO</span> ()
+<span class="ot">&gt;</span> testShowBox2 <span class="fu">=</span>
+<span class="ot">&gt;</span>    <span class="fu">mapM_</span> (\(<span class="dt">ShowBox2</span> v sh) <span class="ot">-&gt;</span> <span class="fu">putStrLn</span> <span class="fu">$</span> sh v) boxList2</code></pre>
+<pre><code>*Main&gt; testShowBox2
+1
+False
+[1,2,3]</code></pre>
+<p>Here we are passing around <code>show</code> explicitly, which is certainly less convenient, than just setting a <code>Show</code> constraint while declaring the data type.</p>
+<p>Hiding the type in such a way, by using an existential type along with a constraining type class is a popular approach (it is used for example in the famous <code>xmonad</code> window manager), but this is considered a Haskell “antipattern” by some people (because sometimes we can replace it with a simpler approach). For more details, see this interesting <a href="http://lukepalmer.wordpress.com/2010/01/24/haskell-antipattern-existential-typeclass/">post</a>.</p>
+<h2 id="why-forall">Why “forall”?</h2>
+<p>You have probably noticed that we used <code>forall</code> in the Haskell code while working with existentials, why so? <code>exists</code> seems to be more appropriate, no?</p>
+<p>Let’s see why it works.</p>
+<pre><code>data T = C1 (exists a. F a) -- what we wanted to write, not valid Haskell
+data T = forall a. C2 (F a) -- what we wrote in valid Haskell</code></pre>
+<p>Here, <code>F</code> is some type constructor that uses <code>a</code>.</p>
+<p>It turns out that we can show equivalence of these definitions. Curry-Howard isomorphism to the rescue!</p>
+<div class="figure">
+<img src="../static/curry-howard-correspondence.jpg" title="Curry-Howard correspondence" />
+</div>
+<p>I won’t go into details here (and frankly, I’m far from being an expert in this area), but Curry-Howard correspondence demonstrates a beautiful connection between type theory and intuitionistic (or constructive) logic, where types corresponds to logic propositions, and values corresponds to proofs of these propositions.</p>
+<p>Let’s write types of constructors:</p>
+<pre><code>C1 :: (exists a. F a) -&gt; T
+C2 :: forall a. (F a -&gt; T)</code></pre>
+<p>This corresponds to the following propositions in first-order logic, as stated by Curry-Howard isomorphism:</p>
+<pre><code>(∃a. F(a)) -&gt; T
+∀a. (F(a) -&gt; T)</code></pre>
+<p>It’s an easy exercise to prove their equivalence, i.e. to prove the following:</p>
+<pre><code>(∃a. F(a)) -&gt; T ⇔ ∀a. (F(a) -&gt; T)</code></pre>
+<p>You can see an example of the proof using so-called sequent calculus (even with Coq source for curious!) in this <a href="http://blog.ezyang.com/2010/10/existential-type-curry/">article</a> of Edward Z. Yang, who also mentions this formula while talking about existential types.</p>
+<p>If you want to learn more about Curry-Howard isomorphism, many people recommend <a href="http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.17.7385">Lectures on the Curry-Howard Isomorphism</a> by Morten Heine B. Sørensen and Pawel Urzyczyn.</p>
+<h2 id="existentials-and-currying">Existentials and currying</h2>
+<p>Let me show you one more unexpected and beautiful idea. As you probably remember a value of existential type is a pair of a term and a type:</p>
+<pre><code>value of ∃a.F(a) = (Type, term of F(Type))</code></pre>
+<p>where <code>F</code> is a type constructor.</p>
+<p>But what is the interpretation of universally quantified type ∀a. F(a)?</p>
+<p>We haven’t talked about universally quantified types in this article, but a value of such type can be thought of as a mapping of any type <code>a</code> to a term of type <code>F(a)</code>, or just a function from type <code>a</code> to a value of <code>F(a)</code> type, i.e.:</p>
+<pre><code>value of ∀a. F(a) = Type -&gt; term of F(Type)</code></pre>
+<p>A list might be a good example of a universally quantified type:</p>
+<pre><code>data List a = Cons a (List a)
+            | Nil</code></pre>
+<p>So, existentials are pairs and universals are functions. Now taking this interpretation into consideration let’s rewrite types of our constructors from:</p>
+<pre><code>C1 :: (exists a. F a) -&gt; T
+C2 :: forall a. (F a -&gt; T)</code></pre>
+<p>into:</p>
+<pre><code>C1 :: (S, value of F(S)) -&gt; T
+C2 :: S -&gt; (value of F(S) -&gt; T)</code></pre>
+<p><code>S</code> is some type here. We substituted values of existential and universal types according to our pairs/functions interpretation.</p>
+<p>And now we can see that <code>C1</code> to <code>C2</code> can be easily transformed one into another using <strong>currying</strong>! Let’s rewrite it once more for clarity:</p>
+<pre><code>C1 :: (S, v) -&gt; T
+C2 :: S -&gt; (v -&gt; T)
+
+curry C1 = C2</code></pre>
+<p>Beautiful!</p>
+<p>As we can see, these two constructors have isomorphic types and therefore we can express existentials using universal quantifier <code>forall</code>, which is exactly what GHC does.</p>
+<h2 id="existentials-in-ghc">Existentials in GHC</h2>
+<p>To use existentials you will need <code>ExistentialQuantification</code> pragma in GHC. Also, note that <code>forall</code> keyword is necessary while declaring existentials, you can’t omit it, i.e. you can’t write this code:</p>
+<pre><code>data Box = Box a</code></pre>
+<p>assuming that <code>a</code> is existential just because it’s not present in the left hand side of the declaration. Allowing this kind of implicit existentials would have probably increased amount of unexpected errors with tricky messages (when you just forgot to mention a variable in the left hand side of the declaration).</p>
+<p>Other proposals for existentials syntax are described on <a href="http://hackage.haskell.org/trac/haskell-prime/wiki/ExistentialQuantification">Haskell Prime wiki</a>.</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>Existential types are quite an interesting concept, we may use them to abstract away types, hide implementation details and even to simulate objects, message passing and something like dynamic dispatch. It would be cool to write more about it, but this post has already become too large.</p>
+<h2 id="sources-reading-list">Sources / Reading List</h2>
+<p>While trying to grasp existential types and preparing this article, I’ve used many different sources, including Benjamin Pierce’s “Types and programming languages” (which greatly influenced this article), Haskell wiki, Stack Overflow answers, various articles and blog posts, I would like to mention the most valuable and interesting sources here:</p>
+<ol style="list-style-type: decimal">
+<li><p><a href="http://www.cis.upenn.edu/~bcpierce/tapl/">TAPL</a>, Chapter 24 “Existential types”</p></li>
+<li><p>Haskell wiki book, <a href="http://en.wikibooks.org/wiki/Haskell/Existentially_quantified_types">“Existentially qualified types”</a></p></li>
+<li><p>GHC manual, <a href="http://www.haskell.org/ghc/docs/latest/html/users_guide/data-type-extensions.html#existential-quantification">“Existential quantification”</a></p></li>
+<li><p>Stack Overflow questions and answers:</p>
+<ul>
+<li><a href="http://stackoverflow.com/questions/292274/what-is-an-existential-type">What is an Existential Type?</a> (language agnostic)</li>
+<li><a href="http://stackoverflow.com/questions/10753073/whats-the-theoretical-basis-for-existential-types">What’s the theoretical basis for existential types?</a></li>
+<li><a href="http://stackoverflow.com/questions/9259921/haskell-existential-quantification-in-detail">Haskell existential quantification in detail</a></li>
+<li><a href="http://stackoverflow.com/questions/3153789/how-does-one-declare-an-abstract-data-container-type-in-haskell/3154551">How does one declare an abstract data container type in Haskell?</a></li>
+<li><a href="http://stackoverflow.com/questions/10192663/why-cant-existential-types-use-record-syntax">Why can’t Existential Types use record syntax?</a></li>
+</ul></li>
+<li><p>Posts:</p>
+<ul>
+<li><a href="http://blog.ezyang.com/2010/10/existential-type-curry/">Edward Z. Yang “Existential type-curry”</a></li>
+<li><a href="http://lukepalmer.wordpress.com/2010/01/24/haskell-antipattern-existential-typeclass/">Luke Palmer “Haskell Antipattern: Existential Typeclass”</a></li>
+</ul></li>
+<li><p>Articles:</p>
+<ul>
+<li><a href="http://www.cs.ox.ac.uk/jeremy.gibbons/publications/adt.pdf">Jeremy Gibbons “Unfolding abstract datatypes” (PDF)</a></li>
+<li><a href="http://web.cecs.pdx.edu/~mpj/pubs/popl97-fcp.pdf">Mark Jones “First-class polymorphism with type inference” (PDF)</a></li>
+</ul></li>
+</ol>
+<h2 id="exercises">Exercises</h2>
+<ol style="list-style-type: decimal">
+<li><p>It may be instructive to implement stack data structure or complex numbers as an abstract data type with the help of existentials.</p></li>
+<li><p>Try to implement and use Counter with type classes instead of existentials. Are there any major differences?</p></li>
+</ol>
+<hr />
+<p>If you liked my post, consider <a href="http://feeds.feedburner.com/Veselov">subscribing to my feed</a></p>
+
+<div id="disqus_thread"></div>
+
+<script type="text/javascript">
+var disqus_identifier = '/posts/2012-08-30-existential-types.html';
+var disqus_url = 'http://iveselov.info' + '/posts/2012-08-30-existential-types.html';
+var disqus_title = 'Existential types and data abstraction';
+
+(function() {
+   var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+       dsq.src = 'http://iveselov.disqus.com/embed.js';
+       (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+
+<noscript>
+Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a>
+</noscript>
+
+</article>
+
+
+  <footer>
+    Generated by <a href="http://jaspervdj.be/hakyll/" target="_blank">hakyll</a>
+    The entire source code of this website is <a href="http://github.com/sphynx/iveselov.info" target="_blank"> available at github</a>
+    <br />
+    © 2011-2012 Ivan Veselov
+  </footer>
+</body>
+
+</html>

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <meta name="author" content="Ivan Veselov">
+  <meta name="keywords" content="veselov, haskell, programming, travel, ivan veselov, dying_sphynx, sphynx">
+  <meta name="description" content="Home page of Ivan Veselov aka dying_sphynx">
+  <meta name="generator" content="hakyll">
+
+  <link rel="stylesheet" href="../static/main.css" />
+  <link rel="stylesheet" href="../static/rose.css" />
+  <link rel="stylesheet" href="../static/syntax.css" />
+
+  <!-- Google webfonts -->
+  <link href="http://fonts.googleapis.com/css?family=Droid+Sans+Mono|Ubuntu&amp;subset=latin,cyrillic" rel="stylesheet" type="text/css">
+
+  <link rel="icon" href="../favicon.ico" />
+
+  <!--[if IE]>
+  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js"></script>
+
+  <title>GADTs and fully polymorphic functions</title>
+
+  <link rel="openid.server" href="http://www.myopenid.com/server" />
+  <link rel="openid.delegate" href="http://ivan.veselov.myopenid.com/" />
+  <link rel="openid2.local_id" href="http://ivan.veselov.myopenid.com/" />
+  <link rel="openid2.provider" href="http://www.myopenid.com/server" />
+
+  <!-- Google analytics -->
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-21420068-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+</head>
+
+<body>
+  <header>
+    <img src="../static/myself.jpg" id="photo" />
+    <hgroup>
+      <h1 id="myname"><a href="../">Ivan Veselov</a></h1>
+      <h2 id="description"> a software developer, chess player, geek and traveller</h2>
+    </hgroup>
+  </header>
+
+  <script type="text/javascript">
+    var disqus_developer = 1;
+</script>
+
+<article>
+
+<h1 class="post_title">GADTs and fully polymorphic functions</h1>
+<div class="post_date">posted on Aug 16, 2012</div>
+
+<p>Today I’ve been asked a question about GADTs and the answer turned out to be somewhat tricky, so I decided to clarify it for myself in this post.</p>
+<!--more-->
+
+<h2 id="default-values-example">“Default values” example</h2>
+<p>Let’s start with some contrived example and say we want to have default values for certain types. We can use typeclasses for this, but let’s proceed with <a href="http://en.wikibooks.org/wiki/Haskell/GADT">GADTs</a>:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE GADTs #-}</span>
+
+<span class="kw">module</span> <span class="dt">Main</span> <span class="kw">where</span>
+
+<span class="kw">data</span> <span class="dt">Type</span> a <span class="kw">where</span>
+  <span class="dt">TBool</span><span class="ot"> ::</span> <span class="dt">Type</span> <span class="dt">Bool</span>
+  <span class="dt">TInt</span><span class="ot">  ::</span> <span class="dt">Type</span> <span class="dt">Int</span></code></pre>
+<p>Here we have a bare representation of certain Haskell types. Now, our function for getting defaults may be written like this:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">def ::</span> <span class="dt">Type</span> a <span class="ot">-&gt;</span> a
+def t <span class="fu">=</span> <span class="kw">case</span> t <span class="kw">of</span>
+  <span class="dt">TBool</span> <span class="ot">-&gt;</span> <span class="kw">False</span>
+  <span class="dt">TInt</span>  <span class="ot">-&gt;</span> <span class="dv">0</span></code></pre>
+<p>So far, so good. But wait, the patterns <code>TBool</code> and <code>TInt</code> have <code>Type a</code> type, but <code>a</code> parameter is different in each pattern! How can they coexist? And will this work without GADTs?</p>
+<h2 id="polymorphic-functions">Polymorphic functions</h2>
+<p>Let’s try. Assume this, somewhat artificial, code:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">f ::</span> [a] <span class="ot">-&gt;</span> a
+f x <span class="fu">=</span> <span class="kw">case</span> x <span class="kw">of</span>
+   [<span class="kw">True</span>] <span class="ot">-&gt;</span> <span class="kw">True</span>
+   [<span class="dv">1</span>]    <span class="ot">-&gt;</span> <span class="dv">1</span></code></pre>
+<p>Here we want to achieve something similar: a polymorphic function which have different <code>a</code> in its clauses. But this clearly won’t work, even if left only with the first clause:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">g ::</span> [a] <span class="ot">-&gt;</span> a
+g [<span class="kw">True</span>] <span class="fu">=</span> <span class="kw">True</span></code></pre>
+<p>GHC error is the following:</p>
+<pre><code>  &quot;Couldn't match type `a' with `Bool':
+    `a' is a rigid type variable bound by the type signature
+      for g :: [a] -&gt; a&quot;</code></pre>
+<p>So what’s happening here? In the type signature we say <code>g :: [a] -&gt; a</code> which means that we promise that <code>g</code> should return a truly polymorphic value, not a dull <code>Bool</code>, as we do in this case. The same is true about the patterns: we are not allowed to use concrete types in the patterns, since this will break polymorphism and our promise that <code>g</code> should work for the list of any type <code>a</code>.</p>
+<p>Even simpler example of the problem would be the following function, which gives a similar typing error:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">g ::</span> a
+g <span class="fu">=</span> <span class="st">&quot;aaa&quot;</span></code></pre>
+<p>This fails. One might think - hey, a <code>String</code> may be an <code>a</code> too, why not to cast it automatically, like we do, say, in Java?</p>
+<pre class="sourceCode java"><code class="sourceCode java">Object <span class="fu">g</span>() {
+  <span class="kw">return</span> <span class="st">&quot;aaa&quot;</span>;
+}</code></pre>
+<p>The problem with that approach is that in Haskell the <em>caller</em> of the function relies on the fact that it’s polymorphic and decides what <code>a</code> variable actually is. For example, suppose we are using <code>g</code> function in the following code:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">h ::</span> <span class="dt">Int</span>
+h <span class="fu">=</span> <span class="dv">1</span> <span class="fu">+</span> g</code></pre>
+<p>This is a perfectly legal piece of code, since <code>g</code> supposed to be fully polymorphic, thus it might be used as an addend too. But if <code>g</code> would have returned a string “aaa”, this certainly won’t be the case.</p>
+<p>On the other hand, in Java, the <em>callee</em> (not the caller) decides which type is actually used for <code>a</code>, and the only thing that caller knows is that certain interface is supported. So the callee may decide that it’s perfectly fine to return a String “aaa”, as soon as it conforms to the Object interface. And the caller might only use Object methods to do something with that String. So, we can’t implement <code>h</code> analog in Java, because Object does not expose any methods for addition.</p>
+<p>This leads to further question: are there any reasonable implementations of function with the type signature <code>g :: a</code>? To be a valid implementation, the returned value has to be of every possible type. There is only one such value: ⊥, so the only possible implementation is:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">g ::</span> a
+g <span class="fu">=</span> <span class="fu">undefined</span></code></pre>
+<h2 id="back-to-gadts">Back to GADTs</h2>
+<p>Ok, now we have seen that such functions won’t compile and understood why, but why it works with GADT?</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">def ::</span> <span class="dt">Type</span> a <span class="ot">-&gt;</span> a
+def <span class="dt">TBool</span> <span class="fu">=</span> <span class="kw">False</span>
+def <span class="dt">TInt</span>  <span class="fu">=</span> <span class="dv">0</span></code></pre>
+<p>Let’s take a closer look on the first clause:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">def <span class="dt">TBool</span> <span class="fu">=</span> <span class="kw">False</span></code></pre>
+<p>The right hand side of the definition is obviously of type <code>Bool</code>, not <code>a</code>. However, if the argument to <code>def</code> is <code>TBool</code>, then the type parameter <code>a</code> must be exactly <code>Bool</code>, this restriction is clearly specified in GADT definition:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- a is Bool here!</span>
+<span class="dt">TBool</span><span class="ot"> ::</span> <span class="dt">Type</span> <span class="dt">Bool</span></code></pre>
+<p>So the right hand side has type <code>a</code> in this context. Similarly, the RHS of the second definition has type <code>Int</code>, but only in the context when <code>a</code> must be <code>Int</code>. Therefore, everything fits in place and we have a well-typed program.</p>
+<h2 id="moral">Moral</h2>
+<p>This pattern matching with simultaneous type refinement seems to be one of the key features of GADTs. It allows to refine general type variables like <code>a</code> to something more concrete with the help of user-defined type refinement (specified in GADTs definition), which in turn allows writing so much nicer code!</p>
+
+<div id="disqus_thread"></div>
+
+<script type="text/javascript">
+var disqus_identifier = '/posts/2012-08-16-gadts-and-polymorphic-functions.html';
+var disqus_url = 'http://iveselov.info' + '/posts/2012-08-16-gadts-and-polymorphic-functions.html';
+var disqus_title = 'GADTs and fully polymorphic functions';
+
+(function() {
+   var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+       dsq.src = 'http://iveselov.disqus.com/embed.js';
+       (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+
+<noscript>
+Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a>
+</noscript>
+
+</article>
+
+
+  <footer>
+    Generated by <a href="http://jaspervdj.be/hakyll/" target="_blank">hakyll</a>
+    The entire source code of this website is <a href="http://github.com/sphynx/iveselov.info" target="_blank"> available at github</a>
+    <br />
+    © 2011-2012 Ivan Veselov
+  </footer>
+</body>
+
+</html>

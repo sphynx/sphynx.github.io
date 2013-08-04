@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Ivan Veselov - a personal blog</title>
+        <link>http://iveselov.info</link>
+        <description><![CDATA[Personal blog of Ivan Veselov]]></description>
+        <atom:link href="http://iveselov.info/rss.xml" rel="self"
+                   type="application/rss+xml" />
+        <lastBuildDate>Thu, 16 Aug 2012 00:00:00 UT</lastBuildDate>
+        <item>
+    <title>GADTs and fully polymorphic functions</title>
+    <link>http://iveselov.info/posts/2012-08-16-gadts-and-polymorphic-functions.html</link>
+    <description><![CDATA[A post which explores type refinement in GADTs and certain aspects of polymorphic functions]]></description>
+    <pubDate>Thu, 16 Aug 2012 00:00:00 UT</pubDate>
+    <guid>http://iveselov.info/posts/2012-08-16-gadts-and-polymorphic-functions.html</guid>
+</item>
+<item>
+    <title>Existential types and data abstraction</title>
+    <link>http://iveselov.info/posts/2012-08-30-existential-types.html</link>
+    <description><![CDATA[My attempt to explain existential types and their connection to abstract data types]]></description>
+    <pubDate>Thu, 30 Aug 2012 00:00:00 UT</pubDate>
+    <guid>http://iveselov.info/posts/2012-08-30-existential-types.html</guid>
+</item>
+
+    </channel> 
+</rss>
